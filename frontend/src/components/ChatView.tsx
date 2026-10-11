@@ -38,6 +38,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenWorkflow, onGoToApprov
   const [activeRunStatus, setActiveRunStatus] = useState<{ id: string; status: string; goal: string } | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const samplePrompts = [
     { title: 'Refund Window Policy', text: 'What is the refund window for digital goods?' },
@@ -70,6 +71,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenWorkflow, onGoToApprov
   };
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     loadConversations();
   }, []);
 
@@ -82,8 +84,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenWorkflow, onGoToApprov
   }, [activeConv]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   }, [messages, activeRunStatus]);
+
+  const handleStartNewChat = () => {
+    setActiveConv(null);
+    setMessages([]);
+    setInputPrompt('');
+    setNewTitle('');
+  };
 
   const handleCreateConversation = async () => {
     if (!newTitle.trim()) return;
@@ -169,7 +183,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenWorkflow, onGoToApprov
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '290px 1fr', height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
       
       {/* Left Sidebar: Threads */}
       <div
@@ -179,46 +193,69 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenWorkflow, onGoToApprov
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ padding: '16px', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-              Conversations
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+          {/* Prominent + New Chat button */}
+          <button
+            onClick={handleStartNewChat}
+            className="btn btn-primary"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              fontWeight: 600,
+              fontSize: '0.86rem',
+              boxShadow: '0 0 16px rgba(139, 92, 246, 0.35)',
+              marginBottom: '12px',
+            }}
+          >
+            <Plus size={16} />
+            <span>New Chat</span>
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+              Recent Threads
             </span>
             <button
               onClick={loadConversations}
               className="btn btn-secondary btn-icon"
-              style={{ width: '28px', height: '28px' }}
+              style={{ width: '26px', height: '26px' }}
               title="Refresh"
             >
-              <RefreshCw size={13} />
+              <RefreshCw size={12} />
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px' }}>
             <input
               type="text"
               className="input"
-              style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-              placeholder="New thread title..."
+              style={{ padding: '5px 8px', fontSize: '0.78rem' }}
+              placeholder="Name new thread..."
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateConversation()}
             />
             <button
               onClick={handleCreateConversation}
-              className="btn btn-primary"
-              style={{ padding: '6px 12px' }}
-              title="Create"
+              className="btn btn-secondary"
+              style={{ padding: '5px 10px', fontSize: '0.78rem' }}
+              title="Create named thread"
             >
-              <Plus size={16} />
+              <Plus size={14} />
             </button>
           </div>
         </div>
 
         {/* Conversation List */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px', minHeight: 0 }}>
           {conversations.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
               No conversations yet. Create one or start asking a question!
@@ -337,7 +374,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenWorkflow, onGoToApprov
         </div>
 
         {/* Messages Scroll Area */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div
+          ref={messagesContainerRef}
+          style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0 }}
+        >
           
           {messages.length === 0 && !isSubmitting && (
             <div style={{ maxWidth: '680px', margin: '40px auto', textAlign: 'center' }}>

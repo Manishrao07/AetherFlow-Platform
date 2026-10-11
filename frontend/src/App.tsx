@@ -447,7 +447,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Body */}
-      <main style={{ flex: 1 }}>
+      <main style={{ flex: 1, minHeight: 0, overflow: activeTab === 'chat' ? 'hidden' : 'auto' }}>
         {activeTab === 'chat' && (
           <ChatView
             onOpenWorkflow={handleOpenWorkflow}
