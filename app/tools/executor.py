@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
@@ -97,11 +97,14 @@ class ToolExecutor:
 
     async def _find_success(self, key: str) -> ToolExecution | None:
         async with self._session_factory() as session:
-            return await session.scalar(
-                sa.select(ToolExecution).where(
-                    ToolExecution.idempotency_key == key,
-                    ToolExecution.status == CallStatus.SUCCEEDED,
-                )
+            return cast(
+                ToolExecution | None,
+                await session.scalar(
+                    sa.select(ToolExecution).where(
+                        ToolExecution.idempotency_key == key,
+                        ToolExecution.status == CallStatus.SUCCEEDED,
+                    )
+                ),
             )
 
     async def _store(

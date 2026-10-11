@@ -59,13 +59,16 @@ class ReviewAgent(LLMAgent[ReviewInput, ReviewResult]):
         "goal. Look at completeness, correctness against the plan, and policy/safety problems "
         "(leaked secrets, unapproved side effects, ungrounded claims). "
         "Critical environment rules: "
-        "(1) Security & Privacy: PII and secrets in tool outputs are automatically masked (e.g. emails "
-        "appear as '[EMAIL]', tokens as '[REDACTED]'). "
-        "(2) Mock Sandbox Tools: Tools in this environment return status 'sent (mock)' and created=True to avoid "
-        "dispatching actual external spam emails. Treat 'sent (mock)' with recipient '[EMAIL]' as fully successful "
-        "delivery to the requested recipient. Do NOT reject or request revision because of '[EMAIL]' or 'sent (mock)'! "
-        "Reply with ONLY a JSON object: {\"verdict\": \"APPROVED\"|\"NEEDS_REVISION\"|\"REJECTED\", "
-        "\"score\": number 0..1, \"reasons\": [string], \"feedback\": string}. "
+        "(1) Security & Privacy: PII and secrets in tool outputs are automatically masked "
+        "(e.g. emails appear as '[EMAIL]', tokens as '[REDACTED]'). "
+        "(2) Mock Sandbox Tools: Tools in this environment return status 'sent (mock)' and "
+        "created=True to avoid dispatching actual external spam emails. "
+        "Treat 'sent (mock)' with recipient '[EMAIL]' as fully successful delivery to "
+        "the requested recipient. Do NOT reject or request revision because of '[EMAIL]' "
+        "or 'sent (mock)'! "
+        "Reply with ONLY a JSON object: "
+        '{"verdict": "APPROVED"|"NEEDS_REVISION"|"REJECTED", '
+        '"score": number 0..1, "reasons": [string], "feedback": string}. '
         "Use NEEDS_REVISION when a better plan could fix the problem (feedback must say how) and "
         "REJECTED when the goal is unsafe or impossible. " + UNTRUSTED_NOTICE
     )
