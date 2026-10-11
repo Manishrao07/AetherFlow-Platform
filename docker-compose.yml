@@ -1,0 +1,163 @@
+# Everything runs from this folder:  docker compose up --build
+# All values have safe DEV defaults, so no .env file is required. Override via environment
+# or a .env file next to this one. Never use these defaults in production.
+name: project1-workflow
+
+x-app-env: &app-env
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-wf}:${POSTGRES_PASSWORD:-wf}@db:5432/${POSTGRES_DB:-wf}
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: ${JWT_SECRET:-change-me-dev-only-secret-at-least-32-chars}
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_REQUESTS_PER_MINUTE: ${LLM_REQUESTS_PER_MINUTE:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
+  TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+  DEEP_RESEARCH_MAX_QUESTIONS: ${DEEP_RESEARCH_MAX_QUESTIONS:-4}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8501}
+  SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-Demo#Pass123}
+  WORKER_ENABLED: ${WORKER_ENABLED:-true}
+  TRACING_EXPORTER: ${TRACING_EXPORTER:-console}
+  OTLP_ENDPOINT: ${OTLP_ENDPOINT:-}
+  METRICS_TOKEN: ${METRICS_TOKEN:-}
+  LLM_CACHE_ENABLED: ${LLM_CACHE_ENABLED:-false}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wf}
+      POSTGRES_DB: ${POSTGRES_DB:-wf}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+    # WHY no published port: only containers on the `backend` network can reach the database.
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  # WHY a separate one-shot migration service: with several API replicas, running
+  # `alembic upgrade` inside each would race. One job migrates, then the API starts.
+  migrate:
+    build: { context: ., target: runtime }
+    command: ["alembic", "upgrade", "head"]
+    environment: *app-env
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [backend]
+    restart: "no"
+
+  api:
+    build: { context: ., target: runtime }
+    environment: *app-env
+    volumes:
+      - ./app:/srv/app:ro
+    ports:
+      - "8080:8000"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    networks: [backend]
+    restart: unless-stopped
+
+  # The web UI. It only talks to the API over HTTP (no database access).
+  ui:
+    build: { context: ., target: ui }
+    environment:
+      API_BASE_URL: http://api:8000
+      UI_SHOW_DEMO_HINT: ${UI_SHOW_DEMO_HINT:-true}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    ports:
+      - "8585:8501"
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [backend]
+    restart: unless-stopped
+
+  # ---- Optional: stand-alone workers (scale the orchestrator independently of the API) ----
+  #   WORKER_ENABLED=false docker compose --profile workers up --scale worker=2
+  # Leases in Postgres make several workers safe: each run is driven by exactly one of them.
+  worker:
+    profiles: ["workers"]
+    build: { context: ., target: runtime }
+    command: ["python", "-m", "app.orchestrator.runner"]
+    environment:
+      <<: *app-env
+      WORKER_METRICS_PORT: "9100"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    networks: [backend]
+    restart: unless-stopped
+
+  # ---- Optional: metrics + dashboards (docker compose --profile observability up --build) ----
+  # WHY a profile: the core product needs only db/redis/api; the dashboards are an add-on.
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v2.55.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on: [api]
+    networks: [backend]
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:11.3.1
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # DEV convenience: read-only dashboards without logging in. Disable for any shared host.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/workflow-platform.json
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+    networks: [backend]
+
+  # Run the test-suite in a container:  docker compose --profile test run --rm tests
+  tests:
+    profiles: ["test"]
+    build: { context: ., target: test }
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-wf}:${POSTGRES_PASSWORD:-wf}@db:5432/${POSTGRES_DB:-wf}
+      TEST_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-wf}:${POSTGRES_PASSWORD:-wf}@db:5432/wf_test
+      ENVIRONMENT: test
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [backend]
+
+networks:
+  backend:
+
+volumes:
+  pgdata:
+  promdata:
+  grafanadata:

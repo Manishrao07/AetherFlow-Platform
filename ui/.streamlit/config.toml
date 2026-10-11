@@ -1,0 +1,9 @@
+[server]
+headless = true
+# Behind a reverse proxy, XSRF and CORS protection stay ON (Streamlit's defaults).
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#2563eb"

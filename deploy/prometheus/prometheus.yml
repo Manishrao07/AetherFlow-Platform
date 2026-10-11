@@ -1,0 +1,21 @@
+# Scrape config for the optional observability stack:
+#   docker compose --profile observability up --build
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # The API process (it also runs the in-process worker unless WORKER_ENABLED=false).
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  # Optional stand-alone workers: `docker compose --profile workers up --scale worker=2`.
+  # WHY dns_sd: every scaled replica gets its own IP behind the service name, and Prometheus
+  # re-resolves it, so new replicas are scraped automatically. Down/empty when not started.
+  - job_name: workers
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9100

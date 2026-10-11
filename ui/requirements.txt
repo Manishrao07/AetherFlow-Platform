@@ -1,0 +1,5 @@
+# Dependencies of the Streamlit UI image only (the API image does not install these).
+# The UI talks to the API over HTTP; it needs no database driver and no app package.
+streamlit>=1.45,<2
+httpx>=0.27
+prometheus-client>=0.20
