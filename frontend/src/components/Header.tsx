@@ -143,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
                   border: '1px solid rgba(139, 92, 246, 0.25)',
                 }}
               >
-                v0.1
+                v1.0
               </span>
             </div>
           </div>
