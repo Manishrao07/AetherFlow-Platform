@@ -19,7 +19,7 @@ import { ChatView } from './components/ChatView';
 import { WorkflowsView } from './components/WorkflowsView';
 import { ApprovalsView } from './components/ApprovalsView';
 import { AuditLogsView } from './components/AuditLogsView';
-import { api, getApiBase, getToken, setApiBase } from './services/api';
+import { api, clearToken, getApiBase, getToken, setApiBase } from './services/api';
 import { Role, User } from './types/api';
 
 export const App: React.FC = () => {
@@ -30,9 +30,9 @@ export const App: React.FC = () => {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  // Manual login form state
-  const [loginEmail, setLoginEmail] = useState('operator@demo.local');
-  const [loginPassword, setLoginPassword] = useState('Demo#Pass123');
+  // Manual login form state - empty by default, no autofill
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showApiConfig, setShowApiConfig] = useState(false);
   const [customApiUrl, setCustomApiUrl] = useState(getApiBase());
@@ -61,12 +61,13 @@ export const App: React.FC = () => {
         const user = await api.getMe();
         setCurrentUser(user);
       } catch {
-        // Token invalid, try auto-logging in as operator
-        await handleRoleSwitch('operator');
+        // Token invalid or expired: clear token and require explicit login
+        clearToken();
+        setCurrentUser(null);
       }
     } else {
-      // Auto-login as default operator for seamless demo experience
-      await handleRoleSwitch('operator');
+      // No active session: require user to authenticate
+      setCurrentUser(null);
     }
     setAuthLoading(false);
   };
@@ -111,6 +112,9 @@ export const App: React.FC = () => {
   const handleLogout = () => {
     api.logout();
     setCurrentUser(null);
+    setLoginEmail('');
+    setLoginPassword('');
+    setLoginError(null);
   };
 
   const handleOpenWorkflow = (runId: string) => {
@@ -168,73 +172,15 @@ export const App: React.FC = () => {
             Multi-Agent Workflow Platform & Governance
           </p>
 
-          {/* Quick Demo 1-Click Role Logins */}
-          <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-            <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 600 }}>
-              Quick 1-Click Demo Login
-            </span>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <button
-                onClick={() => handleRoleSwitch('operator')}
-                className="btn btn-secondary"
-                style={{ fontSize: '0.78rem', justifyContent: 'flex-start', padding: '8px 10px' }}
-              >
-                <Bot size={14} color="#818cf8" />
-                <span>Operator</span>
-              </button>
-              <button
-                onClick={() => handleRoleSwitch('approver')}
-                className="btn btn-secondary"
-                style={{ fontSize: '0.78rem', justifyContent: 'flex-start', padding: '8px 10px' }}
-              >
-                <Shield size={14} color="#fbbf24" />
-                <span>Approver</span>
-              </button>
-              <button
-                onClick={() => handleRoleSwitch('admin')}
-                className="btn btn-secondary"
-                style={{ fontSize: '0.78rem', justifyContent: 'flex-start', padding: '8px 10px' }}
-              >
-                <Cpu size={14} color="#c084fc" />
-                <span>Admin</span>
-              </button>
-              <button
-                onClick={() => handleRoleSwitch('viewer')}
-                className="btn btn-secondary"
-                style={{ fontSize: '0.78rem', justifyContent: 'flex-start', padding: '8px 10px' }}
-              >
-                <UserIcon size={14} color="#34d399" />
-                <span>Viewer</span>
-              </button>
-            </div>
-          </div>
-
-          <div style={{ position: 'relative', marginBottom: '24px' }}>
-            <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
-            <span
-              style={{
-                position: 'absolute',
-                top: '-10px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: '#0e1526',
-                padding: '0 10px',
-                fontSize: '0.72rem',
-                color: 'var(--text-muted)',
-              }}
-            >
-              or enter credentials
-            </span>
-          </div>
-
-          <form onSubmit={handleManualLogin} style={{ textAlign: 'left' }}>
+          <form onSubmit={handleManualLogin} style={{ textAlign: 'left', marginBottom: '24px' }}>
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                Email
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '5px' }}>
+                Email Address
               </label>
               <input
                 type="email"
                 className="input"
+                placeholder="name@company.com or demo role email"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 required
@@ -242,12 +188,13 @@ export const App: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '5px' }}>
                 Password
               </label>
               <input
                 type="password"
                 className="input"
+                placeholder="Enter password"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 required
@@ -264,11 +211,97 @@ export const App: React.FC = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ width: '100%', padding: '10px' }}
+              disabled={authLoading}
+              style={{ width: '100%', padding: '10px', fontSize: '0.85rem' }}
             >
-              Sign In
+              {authLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Authenticating...</span>
+                </>
+              ) : (
+                'Sign In'
+              )}
             </button>
           </form>
+
+          {/* Quick Demo Credentials Helper - Fills fields only, does not bypass authentication */}
+          <div style={{ position: 'relative', marginBottom: '16px' }}>
+            <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
+            <span
+              style={{
+                position: 'absolute',
+                top: '-9px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: '#0e1526',
+                padding: '0 10px',
+                fontSize: '0.68rem',
+                color: 'var(--text-muted)',
+              }}
+            >
+              demo roles (click to fill)
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', textAlign: 'left' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginEmail('operator@demo.local');
+                setLoginPassword('Demo#Pass123');
+                setLoginError(null);
+              }}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '7px 9px' }}
+              title="Fill operator credentials"
+            >
+              <Bot size={13} color="#818cf8" />
+              <span>Operator</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginEmail('approver@demo.local');
+                setLoginPassword('Demo#Pass123');
+                setLoginError(null);
+              }}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '7px 9px' }}
+              title="Fill approver credentials"
+            >
+              <Shield size={13} color="#fbbf24" />
+              <span>Approver</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginEmail('admin@demo.local');
+                setLoginPassword('Demo#Pass123');
+                setLoginError(null);
+              }}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '7px 9px' }}
+              title="Fill admin credentials"
+            >
+              <Cpu size={13} color="#c084fc" />
+              <span>Admin</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginEmail('viewer@demo.local');
+                setLoginPassword('Demo#Pass123');
+                setLoginError(null);
+              }}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '7px 9px' }}
+              title="Fill viewer credentials"
+            >
+              <UserIcon size={13} color="#34d399" />
+              <span>Viewer</span>
+            </button>
+          </div>
 
           {/* API Server status & config */}
           <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
