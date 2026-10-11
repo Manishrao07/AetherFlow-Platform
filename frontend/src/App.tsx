@@ -19,7 +19,7 @@ import { ChatView } from './components/ChatView';
 import { WorkflowsView } from './components/WorkflowsView';
 import { ApprovalsView } from './components/ApprovalsView';
 import { AuditLogsView } from './components/AuditLogsView';
-import { api, clearToken, getApiBase, getToken, setApiBase } from './services/api';
+import { api, clearToken, getApiBase, getToken, isDemoMode, setApiBase, setDemoMode } from './services/api';
 import { Role, User } from './types/api';
 
 export const App: React.FC = () => {
@@ -29,6 +29,7 @@ export const App: React.FC = () => {
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [demoActive, setDemoActive] = useState<boolean>(isDemoMode());
 
   // Manual login form state - empty by default, no autofill
   const [loginEmail, setLoginEmail] = useState('');
@@ -87,8 +88,19 @@ export const App: React.FC = () => {
       setCurrentUser(user);
       setLoginError(null);
       await checkHealthAndApprovals();
-    } catch (err: unknown) {
-      setLoginError((err as Error).message || 'Failed to switch role');
+    } catch {
+      // If live backend fails or tunnel is unreachable, automatically fall back to demo mode
+      try {
+        setDemoMode(true);
+        setDemoActive(true);
+        await api.login(`${role}@demo.local`, 'Demo#Pass123');
+        const user = await api.getMe();
+        setCurrentUser(user);
+        setLoginError(null);
+        setBackendOnline(true);
+      } catch (fallbackErr: unknown) {
+        setLoginError((fallbackErr as Error).message || 'Failed to switch role');
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -103,7 +115,12 @@ export const App: React.FC = () => {
       const user = await api.getMe();
       setCurrentUser(user);
     } catch (err: unknown) {
-      setLoginError((err as Error).message || 'Invalid credentials');
+      const errMsg = (err as Error).message || 'Invalid credentials';
+      if (!backendOnline || errMsg.includes('Failed to fetch') || errMsg.includes('abort')) {
+        setLoginError('Live backend is unreachable. Click "Use Demo Mode ⚡" below to explore.');
+      } else {
+        setLoginError(errMsg);
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -318,22 +335,68 @@ export const App: React.FC = () => {
                       boxShadow: backendOnline ? '0 0 8px rgba(52, 211, 153, 0.6)' : 'none',
                     }}
                   />
-                  <span>Server: {backendOnline ? 'Online' : 'Connecting...'}</span>
+                  <span>
+                    Server: {demoActive ? 'Demo Mode ⚡' : backendOnline ? 'Online 🟢' : 'Connecting... 🟡'}
+                  </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowApiConfig(true)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#818cf8',
-                    cursor: 'pointer',
-                    fontSize: '0.72rem',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  Configure Endpoint
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {!backendOnline && !demoActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDemoMode(true);
+                        setDemoActive(true);
+                        setBackendOnline(true);
+                      }}
+                      style={{
+                        background: 'rgba(139, 92, 246, 0.2)',
+                        border: '1px solid rgba(139, 92, 246, 0.4)',
+                        color: '#c084fc',
+                        cursor: 'pointer',
+                        fontSize: '0.70rem',
+                        padding: '3px 7px',
+                        borderRadius: '5px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Use Demo Mode ⚡
+                    </button>
+                  )}
+                  {demoActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDemoMode(false);
+                        setDemoActive(false);
+                        checkHealthAndApprovals();
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#818cf8',
+                        cursor: 'pointer',
+                        fontSize: '0.70rem',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Live Backend
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowApiConfig(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#818cf8',
+                      cursor: 'pointer',
+                      fontSize: '0.72rem',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Configure
+                  </button>
+                </div>
               </div>
             ) : (
               <div style={{ textAlign: 'left', fontSize: '0.74rem' }}>
