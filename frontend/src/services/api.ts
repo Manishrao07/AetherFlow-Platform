@@ -13,6 +13,8 @@ import {
 const TOKEN_KEY = 'aetherflow_token';
 const API_BASE_KEY = 'aetherflow_api_base';
 
+export const DEFAULT_LIVE_API = 'https://lime-commissioner-anniversary-los.trycloudflare.com';
+
 export const getApiBase = (): string => {
   const custom = localStorage.getItem(API_BASE_KEY);
   if (custom && custom.trim()) {
@@ -27,7 +29,7 @@ export const getApiBase = (): string => {
     window.location.hostname !== 'localhost' &&
     window.location.hostname !== '127.0.0.1'
   ) {
-    return '';
+    return DEFAULT_LIVE_API;
   }
   return 'http://localhost:8080';
 };

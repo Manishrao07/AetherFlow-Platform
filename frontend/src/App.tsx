@@ -19,7 +19,7 @@ import { ChatView } from './components/ChatView';
 import { WorkflowsView } from './components/WorkflowsView';
 import { ApprovalsView } from './components/ApprovalsView';
 import { AuditLogsView } from './components/AuditLogsView';
-import { api, getToken } from './services/api';
+import { api, getApiBase, getToken, setApiBase } from './services/api';
 import { Role, User } from './types/api';
 
 export const App: React.FC = () => {
@@ -34,6 +34,8 @@ export const App: React.FC = () => {
   const [loginEmail, setLoginEmail] = useState('operator@demo.local');
   const [loginPassword, setLoginPassword] = useState('Demo#Pass123');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [showApiConfig, setShowApiConfig] = useState(false);
+  const [customApiUrl, setCustomApiUrl] = useState(getApiBase());
 
   const checkHealthAndApprovals = async () => {
     try {
@@ -267,6 +269,69 @@ export const App: React.FC = () => {
               Sign In
             </button>
           </form>
+
+          {/* API Server status & config */}
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+            {!showApiConfig ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      backgroundColor: backendOnline ? '#34d399' : '#fb7185',
+                      display: 'inline-block',
+                      boxShadow: backendOnline ? '0 0 8px rgba(52, 211, 153, 0.6)' : 'none',
+                    }}
+                  />
+                  <span>Server: {backendOnline ? 'Online' : 'Connecting...'}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowApiConfig(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#818cf8',
+                    cursor: 'pointer',
+                    fontSize: '0.72rem',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Configure Endpoint
+                </button>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'left', fontSize: '0.74rem' }}>
+                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px', fontSize: '0.7rem' }}>
+                  Backend API URL (Tunnel / Server)
+                </label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input
+                    type="url"
+                    className="input"
+                    value={customApiUrl}
+                    onChange={(e) => setCustomApiUrl(e.target.value)}
+                    placeholder="https://..."
+                    style={{ fontSize: '0.72rem', padding: '6px 8px' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ fontSize: '0.72rem', padding: '6px 12px' }}
+                    onClick={() => {
+                      setApiBase(customApiUrl);
+                      setShowApiConfig(false);
+                      checkHealthAndApprovals();
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );

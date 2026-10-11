@@ -1,18 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://lime-commissioner-anniversary-los.trycloudflare.com/api/:path*"
-    },
-    {
-      "source": "/healthz",
-      "destination": "https://lime-commissioner-anniversary-los.trycloudflare.com/healthz"
-    },
-    {
-      "source": "/readyz",
-      "destination": "https://lime-commissioner-anniversary-los.trycloudflare.com/readyz"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
